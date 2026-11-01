@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blazer '94 Fuel Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts & Font Awesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        amber: {
+                            500: '#f59e0b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Desactivar selección visual e interacción táctil extra de zoom móvil */
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Transición suave para barra de medidor */
+        .gauge-bar {
+            transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans max-w-md mx-auto bg-slate-950 border-x border-slate-800 shadow-2xl relative overflow-x-hidden">
+
+    <!-- Encabezado / Header -->
+    <header class="p-4 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center justify-between sticky top-0 z-20">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-inner">
+                <i class="fa-solid fa-truck-pickup text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-slate-100 leading-tight">Blazer '94 Tracker</h1>
+                <p class="text-xs text-slate-400">Control de Combustible V6 4.3L</p>
+            </div>
+        </div>
+        <button onclick="toggleConfigModal()" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition" title="Configuración">
+            <i class="fa-solid fa-gear"></i>
+        </button>
+    </header>
+
+    <!-- Contenido Principal con Scroll -->
+    <main class="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+        
+        <!-- Notificación de Alerta de Reserva (Oculta por defecto) -->
+        <div id="reserveAlert" class="hidden bg-rose-500/15 border border-rose-500/40 rounded-2xl p-4 flex items-center space-x-3 text-rose-300 animate-pulse">
+            <i class="fa-solid fa-triangle-exclamation text-2xl text-rose-500"></i>
+            <div>
+                <p class="font-bold text-sm">¡Alerta de Reserva Activa!</p>
+                <p class="text-xs opacity-90">Te quedan menos de 15 Litros. Se recomienda abastecer pronto.</p>
+            </div>
+        </div>
+
+        <!-- Tablero Visual / Gauge principal -->
+        <section class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <div class="flex justify-between items-start mb-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Nivel Estimado</span>
+                <span id="fuelPercentage" class="font-mono text-2xl font-bold text-emerald-400">0%</span>
+            </div>
+
+            <!-- Gran número central de Litros -->
+            <div class="my-4 text-center">
+                <div class="inline-flex items-baseline space-x-1">
+                    <span id="fuelLiters" class="font-mono text-5xl font-extrabold text-slate-50 tracking-tight">0.0</span>
+                    <span class="text-slate-400 text-lg font-semibold">/ <span id="maxCapacityDisplay">75</span> L</span>
+                </div>
+                <p id="remainingKmEstimate" class="text-xs text-slate-400 mt-1">Autonomía est.: ~<span id="remainingKm">0</span> km</p>
+            </div>
+
+            <!-- Barra Visual del Medidor -->
+            <div class="w-full bg-slate-800 h-6 rounded-full p-1 border border-slate-700 relative mb-2">
+                <div id="gaugeProgress" class="gauge-bar h-full rounded-full bg-emerald-500 w-0"></div>
+            </div>
+
+            <!-- Marcas de Tanque (E - 1/2 - F) -->
+            <div class="flex justify-between text-[10px] font-mono text-slate-500 px-1">
+                <span>E (Vacio)</span>
+                <span>1/4</span>
+                <span>1/2</span>
+                <span>3/4</span>
+                <span>F (Lleno)</span>
+            </div>
+        </section>
+
+        <!-- Tarjetas de Información Rápida (Odómetro y Consumo) -->
+        <section class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5">
+                <p class="text-xs text-slate-400">Último Odómetro</p>
+                <p class="font-mono text-lg font-bold text-slate-200 mt-1"><span id="lastOdometer">0</span> <span class="text-xs font-normal text-slate-500">km</span></p>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5">
+                <p class="text-xs text-slate-400">Rendimiento</p>
+                <p class="font-mono text-lg font-bold text-slate-200 mt-1"><span id="currentKmlDisplay">6.0</span> <span class="text-xs font-normal text-slate-500">km/L</span></p>
+            </div>
+        </section>
+
+        <!-- Formulario: Registrar Nuevo Viaje / Odómetro -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-route text-amber-500"></i> Registrar Nuevo Recorrido
+            </h2>
+            
+            <form id="tripForm" onsubmit="handleTripSubmit(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Odómetro Actual del Tablero (km)</label>
+                    <div class="relative">
+                        <input type="number" id="newOdometerInput" step="1" required placeholder="Ej. 185200" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 font-mono text-sm focus:outline-none focus:border-amber-500">
+                        <span class="absolute right-3 top-2.5 text-xs text-slate-500 font-mono">KM</span>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 px-4 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/10">
+                    <i class="fa-solid fa-calculator"></i>
+                    <span>Descontar Gasolina</span>
+                </button>
+            </form>
+        </section>
+
+        <!-- Botones de Acción de Gasolina (Llenar / Parcial) -->
+        <section class="space-y-2">
+            <button onclick="handleFullTank()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-2xl transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/10">
+                <i class="fa-solid fa-gas-pump"></i>
+                <span>Tanque Lleno (Resetear a Max L)</span>
+            </button>
+
+            <button onclick="openPartialRefuelModal()" class="w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-semibold py-2.5 px-4 rounded-2xl transition flex items-center justify-center space-x-2 text-sm">
+                <i class="fa-solid fa-plus text-amber-500"></i>
+                <span>Cargar Litros Específicos</span>
+            </button>
+        </section>
+
+        <!-- Historial de Registros -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Últimos Movimientos</h3>
+                <button onclick="clearHistory()" class="text-[11px] text-slate-500 hover:text-rose-400">Limpiar</button>
+            </div>
+            <div id="historyList" class="space-y-2 max-h-48 overflow-y-auto pr-1 text-xs text-slate-400">
+                <!-- Se llena dinámicamente -->
+                <p class="text-center text-slate-600 py-2">Sin registros recientes</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL: Configuración -->
+    <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xs p-5 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-100">Configuración Vehículo</h3>
+                <button onclick="toggleConfigModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Capacidad Tanque (Litros)</label>
+                    <input type="number" id="configCapacity" step="1" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-amber-500">
+                    <span class="text-[10px] text-slate-500">Por defecto: 75L para Blazer '94</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Rendimiento (km por Litro)</label>
+                    <input type="number" id="configKml" step="0.1" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-amber-500">
+                    <span class="text-[10px] text-slate-500">Promedio mixto recomendado: 6.0 km/L</span>
+                </div>
+            </div>
+
+            <button onclick="saveConfig()" class="w-full bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-sm hover:bg-amber-400">
+                Guardar Cambios
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL: Carga Parcial -->
+    <div id="partialModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xs p-5 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-100">Recarga Parcial</h3>
+                <button onclick="closePartialRefuelModal()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            
+            <form id="partialForm" onsubmit="handlePartialSubmit(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Litros Añadidos</label>
+                    <input type="number" id="addLitersInput" step="0.1" required placeholder="Ej. 20" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-amber-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Odómetro Actual (Opcional)</label>
+                    <input type="number" id="partialOdometerInput" step="1" placeholder="Ej. 185200" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 font-mono text-sm focus:outline-none focus:border-amber-500">
+                </div>
+
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-sm">
+                    Sumar Combustible
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SCRIPT DE LÓGICA & PERSISTENCIA -->
+    <script>
+        // Clave de almacenamiento local
+        const STORAGE_KEY = "blazer_fuel_tracker_data";
+
+        // Estado inicial / Predeterminados
+        let state = {
+            capacity: 75.0,        // Litros
+            kml: 6.0,              // km / Litro
+            currentLiters: 75.0,   // Litros actuales en el tanque
+            lastOdometer: 0,       // Odómetro registrado
+            history: []            // Registro de historial
+        };
+
+        // Al Cargar la página
+        window.onload = function() {
+            loadState();
+            updateUI();
+        };
+
+        // Cargar desde localStorage
+        function loadState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    state = { ...state, ...JSON.parse(saved) };
+                } catch(e) {
+                    console.error("Error al cargar estado", e);
+                }
+            }
+        }
+
+        // Guardar en localStorage
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            updateUI();
+        }
+
+        // Actualizar la interfaz de usuario
+        function updateUI() {
+            // Cálculos
+            const percentage = Math.max(0, Math.min(100, (state.currentLiters / state.capacity) * 100));
+            const remainingKm = Math.max(0, Math.round(state.currentLiters * state.kml));
+
+            // Textos
+            document.getElementById('fuelLiters').innerText = state.currentLiters.toFixed(1);
+            document.getElementById('maxCapacityDisplay').innerText = state.capacity;
+            document.getElementById('fuelPercentage').innerText = `${Math.round(percentage)}%`;
+            document.getElementById('remainingKm').innerText = remainingKm;
+            document.getElementById('lastOdometer').innerText = state.lastOdometer > 0 ? state.lastOdometer.toLocaleString() : '---';
+            document.getElementById('currentKmlDisplay').innerText = state.kml.toFixed(1);
+
+            // Barra de progreso y colores
+            const progress = document.getElementById('gaugeProgress');
+            progress.style.width = `${percentage}%`;
+
+            // Cambios de color según el nivel de gasolina
+            const alertBox = document.getElementById('reserveAlert');
+            const percText = document.getElementById('fuelPercentage');
+
+            if (percentage <= 20 || state.currentLiters <= 15) {
+                // Estado Crítico / Reserva
+                progress.className = "gauge-bar h-full rounded-full bg-rose-500";
+                percText.className = "font-mono text-2xl font-bold text-rose-500";
+                alertBox.classList.remove('hidden');
+            } else if (percentage <= 45) {
+                // Estado Advertencia
+                progress.className = "gauge-bar h-full rounded-full bg-amber-500";
+                percText.className = "font-mono text-2xl font-bold text-amber-500";
+                alertBox.classList.add('hidden');
+            } else {
+                // Estado Normal
+                progress.className = "gauge-bar h-full rounded-full bg-emerald-500";
+                percText.className = "font-mono text-2xl font-bold text-emerald-400";
+                alertBox.classList.add('hidden');
+            }
+
+            // Renderizar Historial
+            renderHistory();
+        }
+
+        // Enviar Recorrido (Odómetro Nuevo)
+        function handleTripSubmit(e) {
+            e.preventDefault();
+            const newOdo = parseFloat(document.getElementById('newOdometerInput').value);
+
+            if (state.lastOdometer > 0 && newOdo <= state.lastOdometer) {
+                alert("El nuevo odómetro debe ser mayor al último registrado (" + state.lastOdometer + " km)");
+                return;
+            }
+
+            let dist = 0;
+            if (state.lastOdometer > 0) {
+                dist = newOdo - state.lastOdometer;
+            }
+
+            // Calcular consumo
+            const consumedLiters = dist > 0 ? (dist / state.kml) : 0;
+            state.currentLiters = Math.max(0, state.currentLiters - consumedLiters);
+            state.lastOdometer = newOdo;
+
+            // Historial
+            addHistoryItem({
+                type: 'trip',
+                title: `Viaje: -${consumedLiters.toFixed(1)} L`,
+                desc: `${dist} km recorridos (Odo: ${newOdo})`,
+                date: new Date().toLocaleDateString('es-ES', {hour: '2-digit', minute:'2-digit'})
+            });
+
+            document.getElementById('newOdometerInput').value = '';
+            saveState();
+        }
+
+        // Registro: Tanque Lleno
+        function handleFullTank() {
+            const odo = prompt("Ingresa el Odómetro actual (opcional para actualizar recorrido):", state.lastOdometer || "");
+            
+            if (odo !== null && odo !== "") {
+                const parsed = parseFloat(odo);
+                if (!isNaN(parsed) && parsed > 0) {
+                    state.lastOdometer = parsed;
+                }
+            }
+
+            state.currentLiters = parseFloat(state.capacity);
+            
+            addHistoryItem({
+                type: 'refuel',
+                title: 'Tanque Llenado Completo',
+                desc: `Nivel reseteado a ${state.capacity} L`,
+                date: new Date().toLocaleDateString('es-ES', {hour: '2-digit', minute:'2-digit'})
+            });
+
+            saveState();
+        }
+
+        // Abrir/Cerrar Modales
+        function toggleConfigModal() {
+            const modal = document.getElementById('configModal');
+            document.getElementById('configCapacity').value = state.capacity;
+            document.getElementById('configKml').value = state.kml;
+            modal.classList.toggle('hidden');
+        }
+
+        function saveConfig() {
+            const cap = parseFloat(document.getElementById('configCapacity').value);
+            const kml = parseFloat(document.getElementById('configKml').value);
+
+            if (cap > 0 && kml > 0) {
+                state.capacity = cap;
+                state.kml = kml;
+                if (state.currentLiters > cap) state.currentLiters = cap;
+                saveState();
+                toggleConfigModal();
+            } else {
+                alert("Por favor ingresa valores válidos.");
+            }
+        }
+
+        function openPartialRefuelModal() {
+            document.getElementById('partialModal').classList.remove('hidden');
+        }
+
+        function closePartialRefuelModal() {
+            document.getElementById('partialModal').classList.add('hidden');
+        }
+
+        function handlePartialSubmit(e) {
+            e.preventDefault();
+            const liters = parseFloat(document.getElementById('addLitersInput').value);
+            const odo = parseFloat(document.getElementById('partialOdometerInput').value);
+
+            if (liters > 0) {
+                state.currentLiters = Math.min(state.capacity, state.currentLiters + liters);
+                if (!isNaN(odo) && odo > 0) {
+                    state.lastOdometer = odo;
+                }
+
+                addHistoryItem({
+                    type: 'refuel',
+                    title: `Carga Parcial: +${liters.toFixed(1)} L`,
+                    desc: `Nivel actual: ${state.currentLiters.toFixed(1)} L`,
+                    date: new Date().toLocaleDateString('es-ES', {hour: '2-digit', minute:'2-digit'})
+                });
+
+                document.getElementById('addLitersInput').value = '';
+                document.getElementById('partialOdometerInput').value = '';
+                closePartialRefuelModal();
+                saveState();
+            }
+        }
+
+        // Historial Helpers
+        function addHistoryItem(item) {
+            state.history.unshift(item);
+            if (state.history.length > 10) state.history.pop(); // Mantener solo los últimos 10
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyList');
+            if (!state.history || state.history.length === 0) {
+                container.innerHTML = '<p class="text-center text-slate-600 py-2">Sin registros recientes</p>';
+                return;
+            }
+
+            container.innerHTML = state.history.map(item => `
+                <div class="flex justify-between items-center bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                    <div>
+                        <p class="font-medium ${item.type === 'refuel' ? 'text-emerald-400' : 'text-slate-200'}">${item.title}</p>
+                        <p class="text-[10px] text-slate-500">${item.desc}</p>
+                    </div>
+                    <span class="text-[10px] font-mono text-slate-500">${item.date}</span>
+                </div>
+            `).join('');
+        }
+
+        function clearHistory() {
+            if (confirm("¿Deseas borrar el historial de eventos?")) {
+                state.history = [];
+                saveState();
+            }
+        }
+    </script>
+</body>
+</html>
